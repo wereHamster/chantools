@@ -2,10 +2,10 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"encoding/json"
 
 	"github.com/lightninglabs/chantools/lnd"
 	"github.com/lightningnetwork/lnd/graph/db/models"
@@ -14,10 +14,10 @@ import (
 )
 
 type loadAuthProofsCommand struct {
-	ChannelDB       string
-	Source          string
+	ChannelDB string
+	Source    string
 
-	Overwrite       bool
+	Overwrite bool
 
 	cmd *cobra.Command
 }
@@ -34,8 +34,8 @@ func newLoadAuthProofsCommand() *cobra.Command {
 	cc.cmd = &cobra.Command{
 		Use:   "loadauthproofs",
 		Short: "Load auth proofs from an external file into the graph DB",
-		Long: ``,
-		RunE: cc.Execute,
+		Long:  ``,
+		RunE:  cc.Execute,
 	}
 	cc.cmd.Flags().StringVar(
 		&cc.ChannelDB, "channeldb", "", "lnd channel.db file to load "+
@@ -90,11 +90,6 @@ func (c *loadAuthProofsCommand) Execute(_ *cobra.Command, _ []string) error {
 			return nil
 		}
 
-		if !c.Overwrite && info.AuthProof != nil {
-			log.Infof("channel %v already has an auth proof", info.ChannelID)
-			return nil
-		}
-
 		nodeSig1, err := hex.DecodeString(proofData.NodeSig1Bytes)
 		if err != nil {
 			return fmt.Errorf("Error decoding node_sig_1 for channel %d: %v", info.ChannelID, err)
@@ -112,11 +107,23 @@ func (c *loadAuthProofsCommand) Execute(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("Error decoding bitcoin_sig_2 for channel %d: %v", info.ChannelID, err)
 		}
 
-		channelAuthProofsToInsert[info.ChannelID] = models.ChannelAuthProof{
+		authProof := models.ChannelAuthProof{
 			NodeSig1Bytes:    nodeSig1,
 			NodeSig2Bytes:    nodeSig2,
 			BitcoinSig1Bytes: bitcoinSig1,
 			BitcoinSig2Bytes: bitcoinSig2,
+		}
+
+		if info.AuthProof == nil {
+			channelAuthProofsToInsert[info.ChannelID] = authProof
+		} else if c.Overwrite {
+			channelAuthProofsToInsert[info.ChannelID] = authProof
+		} else {
+			log.Infof("channel %v already has an auth proof, skipping", info.ChannelID)
+
+			if !bytes.Equal(info.AuthProof.NodeSig1Bytes, authProof.NodeSig1Bytes) || !bytes.Equal(info.AuthProof.NodeSig2Bytes, authProof.NodeSig2Bytes) || !bytes.Equal(info.AuthProof.BitcoinSig1Bytes, authProof.BitcoinSig1Bytes) || !bytes.Equal(info.AuthProof.BitcoinSig2Bytes, authProof.BitcoinSig2Bytes) {
+				log.Infof("channel %v auth proof differs between graph and source. To overwrite the auth proof in the graph, pass --overwrite to the command", info.ChannelID)
+			}
 		}
 
 		return nil
