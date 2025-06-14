@@ -79,8 +79,9 @@ func (c *loadAuthProofsCommand) Execute(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("error decoding source file %s: %w", c.Source, err)
 	}
 
-	var channelAuthProofsToInsert map[uint64]models.ChannelAuthProof
+	channelAuthProofsToInsert := make(map[uint64]models.ChannelAuthProof)
 
+	log.Info("Scanning current graph for missing auth proofs...")
 	err = graphDB.KVStore.ForEachChannel(func(info *models.ChannelEdgeInfo,
 		policy1, policy2 *models.ChannelEdgePolicy) error {
 
@@ -130,9 +131,9 @@ func (c *loadAuthProofsCommand) Execute(_ *cobra.Command, _ []string) error {
 		shortChanID := lnwire.NewShortChanIDFromInt(chanID)
 		err := graphDB.AddEdgeProof(shortChanID, &proof)
 		if err != nil {
-			log.Infof("Error adding proof for channel %v: %v", shortChanID, err)
+			log.Infof("Error adding proof for channel %v: %v", chanID, err)
 		} else {
-			log.Infof("Successfully added proof for channel %v", shortChanID)
+			log.Infof("Successfully added proof for channel %v", chanID)
 		}
 	}
 
