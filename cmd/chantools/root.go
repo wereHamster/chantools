@@ -123,6 +123,7 @@ func main() {
 		newForceCloseCommand(),
 		newScbForceCloseCommand(),
 		newGenImportScriptCommand(),
+		newLoadAuthProofsCommand(),
 		newMigrateDBCommand(),
 		newPullAnchorCommand(),
 		newRecoverLoopInCommand(),
