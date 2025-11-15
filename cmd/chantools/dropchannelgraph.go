@@ -120,10 +120,42 @@ func (c *dropChannelGraphCommand) Execute(_ *cobra.Command, _ []string) error {
 func insertOwnNodeAndChannels(idKey *btcec.PublicKey, channelDB *channeldb.DB,
 	graphDB *graphdb.ChannelGraph) error {
 
+	ownKey := idKey.SerializeCompressed()
+
+	log.Infof("Inserting my own channels")
+
+	graphDB.Start()
+
+	err := graphDB.KVStore.ForEachChannel(func(info *models.ChannelEdgeInfo,
+		policy1, policy2 *models.ChannelEdgePolicy) error {
+		if bytes.Equal(info.NodeKey1Bytes[:], ownKey) || bytes.Equal(info.NodeKey2Bytes[:], ownKey) {
+			if info.AuthProof != nil {
+				log.Infof("%v (own) with auth proof", info.ChannelID)
+			} else {
+				// log.Infof("%v (own) no auth proof", info.ChannelID)
+			}
+		} else {
+			if info.AuthProof != nil {
+				// log.Infof("%v (oth) with auth proof", info.ChannelID)
+			} else {
+				// log.Infof("%v (oth) no auth proof", info.ChannelID)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("error fetching open channels: %w", err)
+	}
+
 	openChannels, err := channelDB.ChannelStateDB().FetchAllOpenChannels()
 	if err != nil {
 		return fmt.Errorf("error fetching open channels: %w", err)
 	}
+
+	log.Infof("Have %v open channelssss", len(openChannels))
+
+	return nil
 
 	for _, openChan := range openChannels {
 		edge, update, err := newChanAnnouncement(
@@ -138,6 +170,8 @@ func insertOwnNodeAndChannels(idKey *btcec.PublicKey, channelDB *channeldb.DB,
 			return fmt.Errorf("error creating announcement: %w",
 				err)
 		}
+
+		log.Infof("Adding channel %v", update.ChannelID)
 
 		if err := graphDB.AddChannelEdge(edge); err != nil {
 			log.Warnf("Not adding channel edge %v because of "+
